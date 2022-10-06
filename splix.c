@@ -28,45 +28,58 @@ void print_clr(Color clr) {
 }
 
 void arrow_input (direction *dir) {
-	if (IsKeyDown(KEY_RIGHT)) *dir = Right;
-	if (IsKeyDown(KEY_LEFT)) *dir = Left;
-	if (IsKeyDown(KEY_UP)) *dir = Up;
-	if (IsKeyDown(KEY_DOWN)) *dir = Down;
+	if ( IsKeyDown(KEY_RIGHT) && *dir != Left ) *dir = Right;
+	if ( IsKeyDown(KEY_LEFT) && *dir != Right ) *dir = Left;
+	if ( IsKeyDown(KEY_UP) && *dir != Down ) *dir = Up;
+	if ( IsKeyDown(KEY_DOWN) && *dir != Up ) *dir = Down;
 }
 
 void wasd_input (direction *dir) {
-	if (IsKeyDown(KEY_D)) *dir = Right;
-	if (IsKeyDown(KEY_A)) *dir = Left;
-	if (IsKeyDown(KEY_W)) *dir = Up;
-	if (IsKeyDown(KEY_S)) *dir = Down;
+	if ( IsKeyDown(KEY_D) && *dir != Left ) *dir = Right;
+	if ( IsKeyDown(KEY_A) && *dir != Right ) *dir = Left;
+	if ( IsKeyDown(KEY_W) && *dir != Down ) *dir = Up;
+	if ( IsKeyDown(KEY_S) && *dir != Up ) *dir = Down;
 }
 
-void move_player(player *p, const int step) {
-		switch ((*p).head_direction) {
-			case Right:
-				(*p).x += step;
-				break;
-			case Left:
-				(*p).x -= step;
-				break;
-			case Up:
-				(*p).y -= step;
-				break;
-			case Down:
-				(*p).y += step;
-				break;
-			case Still:
-				break;
-		}
+// return 1 if soon outside border
+int check_map_border(player p) {
+	direction dir = p.head_direction;
+	int width = COLUMNS * SQUARE_SIDE;
+	int height = ROWS * SQUARE_SIDE;
+
+	if ( p.x == 0 && dir == Left ) {
+		printf("1\n");
+		return 1;
+	} else if ( p.x + SQUARE_SIDE == width && dir == Right ) {
+		printf("2\n");
+		return 1;
+	} else if ( p.y == 0 && dir == Up ) {
+		printf("3\n");
+		return 1;
+	} else if ( p.y + SQUARE_SIDE == height && dir == Down ) {
+		printf("4\n");
+		return 1;
+	}
+	return 0;
 }
 
-void check_grid(int grid[ROWS][COLUMNS]) {
-	for (int row = 0; row < ROWS; ++row) {
-		for (int col = 0; col < COLUMNS; ++col) {
-			assert(
-				(grid[row][col] == 0)
-			);
-		}
+// move player by step in pointing direction
+move_player(player *p, const int step) {
+	switch ((*p).head_direction) {
+		case Right:
+			(*p).x += step;
+			break;
+		case Left:
+			(*p).x -= step;
+			break;
+		case Up:
+			(*p).y -= step;
+			break;
+		case Down:
+			(*p).y += step;
+			break;
+		case Still:
+			break;
 	}
 }
 
@@ -140,6 +153,10 @@ int main(void)
 			grid[player_1.y / SQUARE_SIDE][player_1.x / SQUARE_SIDE] = -player_1.id;
 		}
 		
+		if (check_map_border(player_1)) {
+			assert((0));
+		}
+
 		move_player(&player_1, head_step);
 		player players[] = {player_1};
 
