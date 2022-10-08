@@ -12,6 +12,9 @@
 enum direction{Still, Up, Down, Left, Right};
 typedef enum direction direction;
 
+enum input_mode{wasd, arrows};
+typedef enum input_mode input_mode;
+
 struct player {
 	int x;
 	int y;
@@ -26,6 +29,8 @@ struct player {
 	int x_lower;
 	int y_upper;
 	int y_lower;
+	
+	input_mode input;
 };
 typedef struct player player;
 
@@ -83,6 +88,7 @@ int check_next_move(int **grid, const player p) {
 			} else {
 				++tile_y;
 			}
+			break;
 		case Still:
 			return 0;
 	}
@@ -118,7 +124,7 @@ void move_player(player *p, const int step) {
 	}
 }
 
-void draw(int **grid, const player players[], const int players_len) {
+void draw(int **grid, player *players[], const int players_len) {
 	int tile; // tile value
 	Color clr;
 
@@ -130,20 +136,20 @@ void draw(int **grid, const player players[], const int players_len) {
 					clr = RAYWHITE;
 				}
 				else if (tile < 0) {
-					 clr = players[-tile-1].color_second;
+					 clr = (*players[-tile-1]).color_second;
 				} else if (tile > 0) {
-					 clr = players[tile-1].color_main;
+					 clr = (*players[tile-1]).color_main;
 				}
 				DrawRectangle(col * SQUARE_SIDE, row * SQUARE_SIDE, SQUARE_SIDE, SQUARE_SIDE, clr);
 			}
 		}
 		for (int i = 0; i<players_len; ++i) {
 			DrawRectangle(
-				players[i].x,
-				players[i].y,
+				(*players[i]).x,
+				(*players[i]).y,
 				SQUARE_SIDE,
 				SQUARE_SIDE,
-				players[i].color_head
+				(*players[i]).color_head
 			);
 		}
 	EndDrawing();
@@ -292,6 +298,16 @@ int main(void)
 	grid[1][2] = 1;
 	grid[2][2] = 1;
 
+	grid[20][20] = 2;
+	grid[21][20] = 2;
+	grid[22][20] = 2;
+	grid[20][21] = 2;
+	grid[21][21] = 2;
+	grid[22][21] = 2;
+	grid[20][22] = 2;
+	grid[21][22] = 2;
+	grid[22][22] = 2;
+
 	InitWindow(screenWidth, screenHeight, "Splix");
 
 	player player_1;
@@ -308,52 +324,84 @@ int main(void)
 	player_1.x_lower = 0;
 	player_1.y_upper = 2;
 	player_1.y_lower = 0;
+	
+	player_1.input = arrows;
+	
+	player player_2;
+	player_2.x = 21 * SQUARE_SIDE;
+	player_2.y = 21 * SQUARE_SIDE;
+	player_2.head_direction = Still;
+	player_2.next_direction = Still;
+	player_2.color_main = DARKGREEN;
+	player_2.color_second = GREEN;
+	player_2.color_head = LIME;
+	player_2.id = 2;
+
+	player_2.x_upper = 22;
+	player_2.x_lower = 20;
+	player_2.y_upper = 22;
+	player_2.y_lower = 20;
+	player *players[] = { &player_1, &player_2 };
+	
+	player_2.input = wasd;
+
+	int players_len = 2;
 
 	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
 	// Main game loop
 	while (!WindowShouldClose())    // Detect window close button or ESC key
 	{
-		arrow_input(&player_1.next_direction);
 		
-		// only update direction and tile ownership when head is aligned with grid
-		if ( player_1.x % SQUARE_SIDE == 0 && player_1.y % SQUARE_SIDE == 0 ) {
-			int aligned_x = player_1.x / SQUARE_SIDE;
-			int aligned_y = player_1.y / SQUARE_SIDE;
+		for ( int i = 0; i < players_len; ++i ) {
 
-			player_1.head_direction = player_1.next_direction;
+			switch ( (*players[i]).input ) {
+				case arrows:
+					arrow_input(&(*players[i]).next_direction);
+					break;
+				case wasd:
+					wasd_input(&(*players[i]).next_direction);
+					break;
+			}
+			
+			// only update direction and tile ownership when head is aligned with grid
+			if ( (*players[i]).x % SQUARE_SIDE == 0 && (*players[i]).y % SQUARE_SIDE == 0 ) {
+				int aligned_x = (*players[i]).x / SQUARE_SIDE;
+				int aligned_y = (*players[i]).y / SQUARE_SIDE;
 
-			// check if player is outside or inside
-			if ( grid[aligned_y][aligned_x] != player_1.id ) {
+				(*players[i]).head_direction = (*players[i]).next_direction;
+
+				// check if player is outside or inside
+				if ( grid[aligned_y][aligned_x] != (*players[i]).id ) {
 	
-				// paint trail (-id)
-				grid[aligned_y][aligned_x] = -player_1.id;
-				
-				// update bounds
-				if ( player_1.x_upper < aligned_x ) {
-					player_1.x_upper = aligned_x;
-				} if ( player_1.x_lower > aligned_x ) {
-					player_1.x_upper = aligned_x;
-				} if ( player_1.y_upper < aligned_y ) {
-					player_1.y_upper = aligned_y;
-				} if ( player_1.y_lower > aligned_y ) {
-					player_1.x_upper = aligned_x;
+					// paint trail (-id)
+					grid[aligned_y][aligned_x] = -(*players[i]).id;
+					
+					// update bounds
+					if ( (*players[i]).x_upper < aligned_x ) {
+						(*players[i]).x_upper = aligned_x;
+					} if ( (*players[i]).x_lower > aligned_x ) {
+						(*players[i]).x_lower = aligned_x;
+					} if ( (*players[i]).y_upper < aligned_y ) {
+						(*players[i]).y_upper = aligned_y;
+					} if ( (*players[i]).y_lower > aligned_y ) {
+						(*players[i]).y_lower = aligned_y;
+					}
+
+				} else {
+					area_capture(grid, (*players[i]) );
 				}
 
-			} else {
-				area_capture(grid, player_1);
+				if (check_next_move(grid, (*players[i]))) {
+					goto exit_game;
+				}
 			}
+			
 
-			if (check_next_move(grid, player_1)) {
-				goto exit_game;
-			}
+			move_player(players[i], head_step);
 		}
-		
+		draw(grid, players, players_len);
 
-		move_player(&player_1, head_step);
-		player players[] = {player_1};
-
-		draw(grid, (player[]) {player_1}, 1);
 	}
 
 	exit_game:
