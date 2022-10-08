@@ -17,10 +17,15 @@ struct player {
 	int y;
 	direction head_direction;
 	direction next_direction;
-	int id; // id field might be replaced by index in "players" list
+	int id;
 	Color color_main;
 	Color color_second;
 	Color color_head;
+	
+	int x_upper;
+	int x_lower;
+	int y_upper;
+	int y_lower;
 };
 typedef struct player player;
 
@@ -116,39 +121,75 @@ void draw(int **grid, player players[], int players_len) {
 }
 
 // 2d array, WIDTH * HEIGHT
-int** make_grid() {
-	int** grid = malloc(ROWS * sizeof(int*));
-	for (int i = 0; i < ROWS; ++i) {
-		grid[i] = calloc(COLUMNS, sizeof(int));
+int** make_grid(int rows, int columns) {
+	int** grid = malloc(rows * sizeof(int*));
+	for (int i = 0; i < rows; ++i) {
+		grid[i] = calloc(columns, sizeof(int));
 	}
 	return grid;
 }
 
-void free_grid(int** grid) {
-	for (int i = 0; i < ROWS; ++i) {
+void free_grid(int** grid, int rows) {
+	for (int i = 0; i < rows; ++i) {
 		free(grid[i]);
 	}
 	free(grid);
 }
 
-void flood_fill(int** grid, int row, int col, int new, int empty) {
+void flood_fill(int** grid, int row, int col, int rows, int columns, int new, int empty) {
 	if ( grid[row][col] != empty ) {
 		return;
 	} else {
 		grid[row][col] = new;
 		if ( row != 0 ) {
-			flood_fill(grid, row-1, col, new, empty);
-		} if (row != ROWS-1) {
-			flood_fill(grid, row+1, col, new, empty);
+			flood_fill(grid, row-1, col, rows, columns, new, empty);
+		} if (row != rows-1) {
+			flood_fill(grid, row+1, col, rows, columns, new, empty);
 		} if ( col != 0 ) {
-			flood_fill(grid, row, col-1, new, empty);
-		} if (row != ROWS-1) {
-			flood_fill(grid, row, col+1, new, empty);
+			flood_fill(grid, row, col-1, rows, columns, new, empty);
+		} if (col != columns-1) {
+			flood_fill(grid, row, col+1, rows, columns, new, empty);
 		}
 	}
+} 
+
+void resize_bounds( int** grid, player *p ) {
+	int x_upper = -1;
+	int x_lower = COLUMNS+1;
+	int y_upper = -1;
+	int y_lower = ROWS+1;
+
+	for (int row = 0; row < ROWS; ++row) {
+		for (int col = 0; col < COLUMNS; ++col) {
+			if ( grid[row][col] == (*p).id ) {
+				if ( x_upper < col ) {
+					x_upper = col;
+				} else if ( x_lower > col ) {
+					x_lower = col;
+				} else if ( y_upper < row ) {
+					y_upper = row;
+				} else if ( y_lower > row ) {
+					y_lower = row;
+				}
+			}
+		}
+	}
+
+	(*p).x_upper = x_upper;
+	(*p).x_lower = x_lower;
+	(*p).y_upper = y_upper;
+	(*p).y_lower = y_lower;
 }
 
 void area_capture(int** grid, player p) {
+
+	/*
+	fill grid is size of the smallest box that contains all of the players
+	tiles + one row/column of "empty" tiles in every direction.
+	*/
+
+	int fill_grid_rows = p.y_upper - p.y_lower + 3;
+	int fill_grid_columns = p.x_upper - p.x_lower + 3;
 
 	// replace trail with owned blocks
 	for (int row = 0; row < ROWS; ++row) {
@@ -159,32 +200,46 @@ void area_capture(int** grid, player p) {
 		}
 	}
 
-	// grid where owned = 0, otherwise 1
-	int** fill_grid = make_grid();
-	for (int row = 0; row < ROWS; ++row) {
-		for (int col = 0; col < COLUMNS; ++col) {
-			if ( grid[row][col] == p.id ) {
-				fill_grid[row][col] = 0;
+	int** fill_grid = make_grid(fill_grid_rows, fill_grid_columns);
+	
+	/*
+	We only need to look at the tiles in the smallest box
+	that contains all of the players tiles.
+	This box is 2 rows / columns smaller than fill_grid.
+	This hopefully explains the test expressions in the for loops.
+
+	As fill_grid has a "marigin" of empty rows/columns,
+	the indexes are shifted by one. 
+	This is why 1 is added to the grid-indexes when
+	accessing fill_grid.
+	*/
+	for ( int row = 0; row < fill_grid_rows-2; ++row ) {
+		for (int col = 0; col < fill_grid_columns-2; ++col) {
+			if ( grid[ row + p.y_lower ][ col + p.x_lower ] == p.id ) {
+				fill_grid[ row+1 ][ col+1 ] = 1;
 			} else {
-				fill_grid[row][col] = 1;
+				fill_grid[ row+1 ][ col+1 ] = 0;
 			}
 		}
 	}
 	
-	// flood fill the 1's with 2
-	// where to start? smaller box fill_grid?
-	flood_fill(fill_grid, 20, 20, 2, 1);
+	// flood fill the 0's with 2, starting in upper left corner
+	flood_fill(fill_grid, 0, 0, fill_grid_rows, fill_grid_columns, 2, 0);
 
-	// replace remaining 1's with p.id
-	for (int row = 0; row < ROWS; ++row) {
-		for (int col = 0; col < COLUMNS; ++col) {
-			if ( fill_grid[row][col] == 1 ) {
-				grid[row][col] = p.id;
+	/*
+	replace remaining 0's with p.id
+	the indexing is explained by comments in the nested loop above.
+	*/
+
+	for (int row = 0; row < fill_grid_rows-2; ++row) {
+		for (int col = 0; col < fill_grid_columns-2; ++col) {
+			if ( fill_grid[ row+1 ][ col+1 ] == 0 ) {
+				grid[ row + p.y_lower ][ col + p.x_lower ] = p.id;
 			}
 		}
 	}
 
-	free_grid(fill_grid);
+	free_grid(fill_grid, fill_grid_rows);
 }
 
 int main(void)
@@ -196,7 +251,7 @@ int main(void)
 	const int screenWidth = COLUMNS * SQUARE_SIDE;
 	const int screenHeight = ROWS * SQUARE_SIDE;
 
-	int** grid = make_grid();
+	int** grid = make_grid(ROWS, COLUMNS);
 
 	grid[0][0] = 1;
 	grid[1][0] = 1;
@@ -220,6 +275,11 @@ int main(void)
 	player_1.color_head = MAGENTA;
 	player_1.id = 1;
 
+	player_1.x_upper = 2;
+	player_1.x_lower = 0;
+	player_1.y_upper = 2;
+	player_1.y_lower = 0;
+
 	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
 	// Main game loop
@@ -229,11 +289,28 @@ int main(void)
 		
 		// only update direction and tile ownership when head is aligned with grid
 		if ( player_1.x % SQUARE_SIDE == 0 && player_1.y % SQUARE_SIDE == 0 ) {
+			int aligned_x = player_1.x / SQUARE_SIDE;
+			int aligned_y = player_1.y / SQUARE_SIDE;
+
 			player_1.head_direction = player_1.next_direction;
 
 			// check if player is outside or inside
-			if ( grid[player_1.y / SQUARE_SIDE][player_1.x / SQUARE_SIDE] != player_1.id ) {
-				grid[player_1.y / SQUARE_SIDE][player_1.x / SQUARE_SIDE] = -player_1.id;
+			if ( grid[aligned_y][aligned_x] != player_1.id ) {
+	
+				// paint trail (-id)
+				grid[aligned_y][aligned_x] = -player_1.id;
+				
+				// update bounds
+				if ( player_1.x_upper < aligned_x ) {
+					player_1.x_upper = aligned_x;
+				} if ( player_1.x_lower > aligned_x ) {
+					player_1.x_upper = aligned_x;
+				} if ( player_1.y_upper < aligned_y ) {
+					player_1.y_upper = aligned_y;
+				} if ( player_1.y_lower > aligned_y ) {
+					player_1.x_upper = aligned_x;
+				}
+
 			} else {
 				area_capture(grid, player_1);
 			}
@@ -250,6 +327,6 @@ int main(void)
 	}
 
 	CloseWindow(); // Close window and OpenGL context
-	free_grid(grid);
+	free_grid(grid, ROWS);
 	return 0;
 }
