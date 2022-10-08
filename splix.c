@@ -118,7 +118,7 @@ void move_player(player *p, const int step) {
 	}
 }
 
-void draw(int **grid, player players[], int players_len) {
+void draw(int **grid, const player players[], const int players_len) {
 	int tile; // tile value
 	Color clr;
 
@@ -150,7 +150,7 @@ void draw(int **grid, player players[], int players_len) {
 }
 
 // 2d array, WIDTH * HEIGHT
-int** make_grid(int rows, int columns) {
+int** make_grid(const int rows, const int columns) {
 	int** grid = malloc(rows * sizeof(int*));
 	for (int i = 0; i < rows; ++i) {
 		grid[i] = calloc(columns, sizeof(int));
@@ -158,14 +158,14 @@ int** make_grid(int rows, int columns) {
 	return grid;
 }
 
-void free_grid(int** grid, int rows) {
+void free_grid(int** grid, const int rows) {
 	for (int i = 0; i < rows; ++i) {
 		free(grid[i]);
 	}
 	free(grid);
 }
 
-void flood_fill(int** grid, int row, int col, int rows, int columns, int new, int empty) {
+void flood_fill(int** grid, const int row, const int col, const int rows, const int columns, const int new, const int empty) {
 	if ( grid[row][col] != empty ) {
 		return;
 	} else {
