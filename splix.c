@@ -7,7 +7,7 @@
 #define ROWS 30
 #define COLUMNS 60
 #define SQUARE_SIDE 20
-#define STEPS_PER_SQUARE 5
+#define STEPS_PER_SQUARE 10
 
 enum direction{Still, Up, Down, Left, Right};
 typedef enum direction direction;
@@ -19,7 +19,8 @@ struct player {
 	direction next_direction;
 	int id; // id field might be replaced by index in "players" list
 	Color color_main;
-	Color color_second
+	Color color_second;
+	Color color_head;
 };
 typedef struct player player;
 
@@ -64,7 +65,7 @@ int check_map_border(player p) {
 }
 
 // move player by step in pointing direction
-move_player(player *p, const int step) {
+void move_player(player *p, const int step) {
 	switch ((*p).head_direction) {
 		case Right:
 			(*p).x += step;
@@ -108,10 +109,82 @@ void draw(int **grid, player players[], int players_len) {
 				players[i].y,
 				SQUARE_SIDE,
 				SQUARE_SIDE,
-				players[i].color_main
+				players[i].color_head
 			);
 		}
 	EndDrawing();
+}
+
+// 2d array, WIDTH * HEIGHT
+int** make_grid() {
+	int** grid = malloc(ROWS * sizeof(int*));
+	for (int i = 0; i < ROWS; ++i) {
+		grid[i] = calloc(COLUMNS, sizeof(int));
+	}
+	return grid;
+}
+
+void free_grid(int** grid) {
+	for (int i = 0; i < ROWS; ++i) {
+		free(grid[i]);
+	}
+	free(grid);
+}
+
+void flood_fill(int** grid, int row, int col, int new, int empty) {
+	if ( grid[row][col] != empty ) {
+		return;
+	} else {
+		grid[row][col] = new;
+		if ( row != 0 ) {
+			flood_fill(grid, row-1, col, new, empty);
+		} if (row != ROWS-1) {
+			flood_fill(grid, row+1, col, new, empty);
+		} if ( col != 0 ) {
+			flood_fill(grid, row, col-1, new, empty);
+		} if (row != ROWS-1) {
+			flood_fill(grid, row, col+1, new, empty);
+		}
+	}
+}
+
+void area_capture(int** grid, player p) {
+
+	// replace trail with owned blocks
+	for (int row = 0; row < ROWS; ++row) {
+		for (int col = 0; col < COLUMNS; ++col) {
+			if ( grid[row][col] == -p.id ) {
+				grid[row][col] = p.id;
+			}
+		}
+	}
+
+	// grid where owned = 0, otherwise 1
+	int** fill_grid = make_grid();
+	for (int row = 0; row < ROWS; ++row) {
+		for (int col = 0; col < COLUMNS; ++col) {
+			if ( grid[row][col] == p.id ) {
+				fill_grid[row][col] = 0;
+			} else {
+				fill_grid[row][col] = 1;
+			}
+		}
+	}
+	
+	// flood fill the 1's with 2
+	// where to start? smaller box fill_grid?
+	flood_fill(fill_grid, 20, 20, 2, 1);
+
+	// replace remaining 1's with p.id
+	for (int row = 0; row < ROWS; ++row) {
+		for (int col = 0; col < COLUMNS; ++col) {
+			if ( fill_grid[row][col] == 1 ) {
+				grid[row][col] = p.id;
+			}
+		}
+	}
+
+	free_grid(fill_grid);
 }
 
 int main(void)
@@ -123,21 +196,28 @@ int main(void)
 	const int screenWidth = COLUMNS * SQUARE_SIDE;
 	const int screenHeight = ROWS * SQUARE_SIDE;
 
-	// grid is 2d array
-	int** grid = malloc(ROWS * sizeof(int*));
-	for (int i = 0; i < ROWS; ++i) {
-		grid[i] = calloc(COLUMNS, sizeof(int));
-	}
+	int** grid = make_grid();
 
-	InitWindow(screenWidth, screenHeight, "raylib [core] example - keyboard input");
+	grid[0][0] = 1;
+	grid[1][0] = 1;
+	grid[2][0] = 1;
+	grid[0][1] = 1;
+	grid[1][1] = 1;
+	grid[2][1] = 1;
+	grid[0][2] = 1;
+	grid[1][2] = 1;
+	grid[2][2] = 1;
+
+	InitWindow(screenWidth, screenHeight, "Splix");
 
 	player player_1;
-	player_1.x = 0;
-	player_1.y = 0;
+	player_1.x = 1 * SQUARE_SIDE;
+	player_1.y = 1 * SQUARE_SIDE;
 	player_1.head_direction = Still;
 	player_1.next_direction = Still;
 	player_1.color_main = MAROON;
 	player_1.color_second = PINK;
+	player_1.color_head = MAGENTA;
 	player_1.id = 1;
 
 	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
@@ -150,7 +230,13 @@ int main(void)
 		// only update direction and tile ownership when head is aligned with grid
 		if ( player_1.x % SQUARE_SIDE == 0 && player_1.y % SQUARE_SIDE == 0 ) {
 			player_1.head_direction = player_1.next_direction;
-			grid[player_1.y / SQUARE_SIDE][player_1.x / SQUARE_SIDE] = -player_1.id;
+
+			// check if player is outside or inside
+			if ( grid[player_1.y / SQUARE_SIDE][player_1.x / SQUARE_SIDE] != player_1.id ) {
+				grid[player_1.y / SQUARE_SIDE][player_1.x / SQUARE_SIDE] = -player_1.id;
+			} else {
+				area_capture(grid, player_1);
+			}
 		}
 		
 		if (check_map_border(player_1)) {
@@ -162,11 +248,8 @@ int main(void)
 
 		draw(grid, (player[]) {player_1}, 1);
 	}
-	CloseWindow(); // Close window and OpenGL context
 
-	for (int i = 0; i < ROWS; ++i) {
-		free(grid[i]);
-	}
-	free(grid);
+	CloseWindow(); // Close window and OpenGL context
+	free_grid(grid);
 	return 0;
 }
