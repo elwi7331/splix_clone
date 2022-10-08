@@ -29,10 +29,6 @@ struct player {
 };
 typedef struct player player;
 
-void print_clr(Color clr) {
-	printf("r: %d, g: %d, b: %d, a: %d\n", clr.r, clr.g, clr.b, clr.a);
-}
-
 void arrow_input (direction *dir) {
 	if ( IsKeyDown(KEY_RIGHT) && *dir != Left ) *dir = Right;
 	if ( IsKeyDown(KEY_LEFT) && *dir != Right ) *dir = Left;
@@ -48,23 +44,56 @@ void wasd_input (direction *dir) {
 }
 
 // return 1 if soon outside border
-int check_map_border(player p) {
+// return 2 if soon in tail (own)
+// return 3 if sonn in tail (other)
+int check_next_move(int **grid, const player p) {
 	direction dir = p.head_direction;
-	int width = COLUMNS * SQUARE_SIDE;
-	int height = ROWS * SQUARE_SIDE;
+	const int width = COLUMNS * SQUARE_SIDE;
+	const int height = ROWS * SQUARE_SIDE;
 
-	if ( p.x == 0 && dir == Left ) {
-		printf("1\n");
-		return 1;
-	} else if ( p.x + SQUARE_SIDE == width && dir == Right ) {
-		printf("2\n");
-		return 1;
-	} else if ( p.y == 0 && dir == Up ) {
-		printf("3\n");
-		return 1;
-	} else if ( p.y + SQUARE_SIDE == height && dir == Down ) {
-		printf("4\n");
-		return 1;
+	// index of tile that player/head is moving towards
+	int tile_x = p.x / SQUARE_SIDE;
+	int tile_y = p.y / SQUARE_SIDE;
+	
+	switch (dir) {
+		case Left:
+			if ( p.x == 0 ) {
+				return 1;
+			} else {
+				--tile_x;
+			} 
+			break;
+		case Right:
+			if ( p.x + SQUARE_SIDE == width ) {
+				return 1;
+			} else {
+				++tile_x;
+			}
+			break;
+		case Up:
+			if ( p.y == 0 ) {
+				return 1;
+			} else {
+				--tile_y;
+			}
+			break;
+		case Down:
+			if ( p.y + SQUARE_SIDE == height ) {
+				return 1;
+			} else {
+				++tile_y;
+			}
+		case Still:
+			return 0;
+	}
+
+	// check if player is moving towards own or other's tail
+	if ( grid[tile_y][tile_x] < 0 ) {
+		if ( grid[tile_y][tile_x] == -p.id ) {
+			return 2;
+		} else {
+			return 3;
+		}
 	}
 	return 0;
 }
@@ -181,7 +210,7 @@ void resize_bounds( int** grid, player *p ) {
 	(*p).y_lower = y_lower;
 }
 
-void area_capture(int** grid, player p) {
+void area_capture(int** grid, const player p) {
 
 	/*
 	fill grid is size of the smallest box that contains all of the players
@@ -314,11 +343,12 @@ int main(void)
 			} else {
 				area_capture(grid, player_1);
 			}
+
+			if (check_next_move(grid, player_1)) {
+				goto exit_game;
+			}
 		}
 		
-		if (check_map_border(player_1)) {
-			assert((0));
-		}
 
 		move_player(&player_1, head_step);
 		player players[] = {player_1};
@@ -326,7 +356,8 @@ int main(void)
 		draw(grid, (player[]) {player_1}, 1);
 	}
 
-	CloseWindow(); // Close window and OpenGL context
-	free_grid(grid, ROWS);
-	return 0;
+	exit_game:
+		CloseWindow(); // Close window and OpenGL context
+		free_grid(grid, ROWS);
+		return 0;
 }
