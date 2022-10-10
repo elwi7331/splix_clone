@@ -18,6 +18,8 @@ typedef enum input_mode input_mode;
 struct player {
 	int x;
 	int y;
+	int prev_x_aligned;
+	int prev_y_aligned;
 	direction head_direction;
 	direction next_direction;
 	int id;
@@ -298,6 +300,8 @@ void spawn(int **grid, player *p) {
 	
 	(*p).x = x * SQUARE_SIDE;
 	(*p).y = y * SQUARE_SIDE;
+	(*p).prev_x_aligned = x;
+	(*p).prev_y_aligned = y;
 
 	(*p).head_direction = Still;
 	(*p).next_direction = Still;
@@ -384,7 +388,7 @@ int main(void)
 						(*players[i]).y_lower = aligned_y;
 					}
 
-				} else {
+				} else if ( grid[(*players[i]).prev_y_aligned][(*players[i]).prev_x_aligned] != (*players[i]).id ) {
 					area_capture(grid, (*players[i]) );
 				}
 
@@ -394,6 +398,10 @@ int main(void)
 						replace(grid, -move_status, 0, ROWS, COLUMNS);
 						spawn(grid, players[move_status-1]);
 					}
+					
+
+				(*players[i]).prev_y_aligned = aligned_y;
+				(*players[i]).prev_x_aligned = aligned_x;
 			}
 			
 
@@ -410,5 +418,4 @@ int main(void)
 }
 
 
-// TODO only capture when just entered own area
 // TODO resize when area has been captured
