@@ -50,7 +50,7 @@ void wasd_input (direction *dir) {
 
 // return 1 if soon outside border
 // return 2 if soon in tail (own)
-// return 3 if sonn in tail (other)
+// negative other.id if soon in other's tail
 int check_next_move(int **grid, const player p) {
 	direction dir = p.head_direction;
 	const int width = COLUMNS * SQUARE_SIDE;
@@ -63,28 +63,28 @@ int check_next_move(int **grid, const player p) {
 	switch (dir) {
 		case Left:
 			if ( p.x == 0 ) {
-				return 1;
+				return p.id;
 			} else {
 				--tile_x;
 			} 
 			break;
 		case Right:
 			if ( p.x + SQUARE_SIDE == width ) {
-				return 1;
+				return p.id;
 			} else {
 				++tile_x;
 			}
 			break;
 		case Up:
 			if ( p.y == 0 ) {
-				return 1;
+				return p.id;
 			} else {
 				--tile_y;
 			}
 			break;
 		case Down:
 			if ( p.y + SQUARE_SIDE == height ) {
-				return 1;
+				return p.id;
 			} else {
 				++tile_y;
 			}
@@ -96,9 +96,9 @@ int check_next_move(int **grid, const player p) {
 	// check if player is moving towards own or other's tail
 	if ( grid[tile_y][tile_x] < 0 ) {
 		if ( grid[tile_y][tile_x] == -p.id ) {
-			return 2;
+			return p.id;
 		} else {
-			return 3;
+			return -grid[tile_y][tile_x];
 		}
 	}
 	return 0;
@@ -216,6 +216,17 @@ void resize_bounds( int** grid, player *p ) {
 	(*p).y_lower = y_lower;
 }
 
+// replace all tiles = a -> b
+void replace(int **grid, int a, int b, int rows, int columns) {
+	for (int row = 0; row < rows; ++row) {
+		for (int col = 0; col < columns; ++col) {
+			if ( grid[row][col] == a ) {
+				grid[row][col] = b;
+			}
+		}
+	}
+}
+
 void area_capture(int** grid, const player p) {
 
 	/*
@@ -226,14 +237,8 @@ void area_capture(int** grid, const player p) {
 	int fill_grid_rows = p.y_upper - p.y_lower + 3;
 	int fill_grid_columns = p.x_upper - p.x_lower + 3;
 
-	// replace trail with owned blocks
-	for (int row = 0; row < ROWS; ++row) {
-		for (int col = 0; col < COLUMNS; ++col) {
-			if ( grid[row][col] == -p.id ) {
-				grid[row][col] = p.id;
-			}
-		}
-	}
+	// fill trail
+	replace(grid, -p.id, p.id, ROWS, COLUMNS);
 
 	int** fill_grid = make_grid(fill_grid_rows, fill_grid_columns);
 	
@@ -277,77 +282,68 @@ void area_capture(int** grid, const player p) {
 	free_grid(fill_grid, fill_grid_rows);
 }
 
+void spawn(int **grid, player *p) {
+	int x = rand() % (COLUMNS-1) + 2;
+	int y = rand() % (ROWS-1)+2;
+
+	grid[y-1][x-1] = (*p).id;
+	grid[y][x-1]   = (*p).id;
+	grid[y+1][x-1] = (*p).id;
+	grid[y-1][x]   = (*p).id;
+	grid[y][x]     = (*p).id;
+	grid[y+1][x]   = (*p).id;
+	grid[y-1][x+1] = (*p).id;
+	grid[y][x+1]  = (*p).id;
+	grid[y+1][x+1] = (*p).id;
+	
+	(*p).x = x * SQUARE_SIDE;
+	(*p).y = y * SQUARE_SIDE;
+
+	(*p).head_direction = Still;
+	(*p).next_direction = Still;
+	
+	(*p).x_lower = x-1;
+	(*p).x_upper = x+1;
+	(*p).y_lower = y-1;
+	(*p).y_upper = y+1;
+}
+
 int main(void)
 {
 	// dimensions
 	int head_step = SQUARE_SIDE / STEPS_PER_SQUARE;
 	assert(SQUARE_SIDE % head_step == 0);
-
 	const int screenWidth = COLUMNS * SQUARE_SIDE;
 	const int screenHeight = ROWS * SQUARE_SIDE;
 
+	// the grid on which the players exist
 	int** grid = make_grid(ROWS, COLUMNS);
 
-	grid[0][0] = 1;
-	grid[1][0] = 1;
-	grid[2][0] = 1;
-	grid[0][1] = 1;
-	grid[1][1] = 1;
-	grid[2][1] = 1;
-	grid[0][2] = 1;
-	grid[1][2] = 1;
-	grid[2][2] = 1;
-
-	grid[20][20] = 2;
-	grid[21][20] = 2;
-	grid[22][20] = 2;
-	grid[20][21] = 2;
-	grid[21][21] = 2;
-	grid[22][21] = 2;
-	grid[20][22] = 2;
-	grid[21][22] = 2;
-	grid[22][22] = 2;
-
+	// boiler stuffz
 	InitWindow(screenWidth, screenHeight, "Splix");
+	SetTargetFPS(60);
 
+	// player stuffs
 	player player_1;
-	player_1.x = 1 * SQUARE_SIDE;
-	player_1.y = 1 * SQUARE_SIDE;
-	player_1.head_direction = Still;
-	player_1.next_direction = Still;
 	player_1.color_main = MAROON;
 	player_1.color_second = PINK;
 	player_1.color_head = MAGENTA;
 	player_1.id = 1;
-
-	player_1.x_upper = 2;
-	player_1.x_lower = 0;
-	player_1.y_upper = 2;
-	player_1.y_lower = 0;
-	
 	player_1.input = arrows;
+	spawn(grid, &player_1);
 	
 	player player_2;
-	player_2.x = 21 * SQUARE_SIDE;
-	player_2.y = 21 * SQUARE_SIDE;
-	player_2.head_direction = Still;
-	player_2.next_direction = Still;
 	player_2.color_main = DARKGREEN;
 	player_2.color_second = GREEN;
 	player_2.color_head = LIME;
 	player_2.id = 2;
-
-	player_2.x_upper = 22;
-	player_2.x_lower = 20;
-	player_2.y_upper = 22;
-	player_2.y_lower = 20;
-	player *players[] = { &player_1, &player_2 };
-	
 	player_2.input = wasd;
+	spawn(grid, &player_2);
 
+	player *players[] = { &player_1, &player_2 };
 	int players_len = 2;
-
-	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+	
+	int move_status; // used when calling check_next_move
 
 	// Main game loop
 	while (!WindowShouldClose())    // Detect window close button or ESC key
@@ -392,9 +388,12 @@ int main(void)
 					area_capture(grid, (*players[i]) );
 				}
 
-				if (check_next_move(grid, (*players[i]))) {
-					goto exit_game;
-				}
+				move_status = check_next_move(grid, (*players[i]));
+					if ( move_status != 0 ) {
+						replace(grid, move_status, 0, ROWS, COLUMNS);
+						replace(grid, -move_status, 0, ROWS, COLUMNS);
+						spawn(grid, players[move_status-1]);
+					}
 			}
 			
 
@@ -409,3 +408,7 @@ int main(void)
 		free_grid(grid, ROWS);
 		return 0;
 }
+
+
+// TODO only capture when just entered own area
+// TODO resize when area has been captured
