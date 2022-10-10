@@ -18,8 +18,11 @@ typedef enum input_mode input_mode;
 struct player {
 	int x;
 	int y;
+	int x_aligned;
+	int y_aligned;
 	int prev_x_aligned;
 	int prev_y_aligned;
+
 	direction head_direction;
 	direction next_direction;
 	int id;
@@ -190,6 +193,18 @@ void flood_fill(int** grid, const int row, const int col, const int rows, const 
 	}
 } 
 
+void update_bounds(player *p) {
+	if ( (*p).x_upper < (*p).x_aligned ) {
+		(*p).x_upper = (*p).x_aligned;
+	} if ( (*p).x_lower > (*p).x_aligned ) {
+		(*p).x_lower = (*p).x_aligned;
+	} if ( (*p).y_upper < (*p).y_aligned ) {
+		(*p).y_upper = (*p).y_aligned;
+	} if ( (*p).y_lower > (*p).y_aligned ) {
+		(*p).y_lower = (*p).y_aligned;
+	}
+}
+
 void resize_bounds( int** grid, player *p ) {
 	int x_upper = -1;
 	int x_lower = COLUMNS+1;
@@ -300,6 +315,8 @@ void spawn(int **grid, player *p) {
 	
 	(*p).x = x * SQUARE_SIDE;
 	(*p).y = y * SQUARE_SIDE;
+	(*p).x_aligned = x;
+	(*p).y_aligned = y;
 	(*p).prev_x_aligned = x;
 	(*p).prev_y_aligned = y;
 
@@ -348,67 +365,67 @@ int main(void)
 	int players_len = 2;
 	
 	int move_status; // used when calling check_next_move
+	player *current; // used when looping through players
 
 	// Main game loop
 	while (!WindowShouldClose())    // Detect window close button or ESC key
 	{
 		
 		for ( int i = 0; i < players_len; ++i ) {
+			current = players[i];
 
-			switch ( (*players[i]).input ) {
+			switch ( (*current).input ) {
 				case arrows:
-					arrow_input(&(*players[i]).next_direction);
+					arrow_input(&(*current).next_direction);
 					break;
 				case wasd:
-					wasd_input(&(*players[i]).next_direction);
+					wasd_input(&(*current).next_direction);
 					break;
 			}
 			
 			// only update direction and tile ownership when head is aligned with grid
-			if ( (*players[i]).x % SQUARE_SIDE == 0 && (*players[i]).y % SQUARE_SIDE == 0 ) {
-				int aligned_x = (*players[i]).x / SQUARE_SIDE;
-				int aligned_y = (*players[i]).y / SQUARE_SIDE;
+			if ( (*current).x % SQUARE_SIDE == 0 && (*current).y % SQUARE_SIDE == 0 ) {
+				(*current).x_aligned = (*current).x / SQUARE_SIDE;
+				(*current).y_aligned = (*current).y / SQUARE_SIDE;
 
-				(*players[i]).head_direction = (*players[i]).next_direction;
+				(*current).head_direction = (*current).next_direction;
 
 				// check if player is outside or inside
-				if ( grid[aligned_y][aligned_x] != (*players[i]).id ) {
+				if ( grid[(*current).y_aligned][(*current).x_aligned] != (*current).id ) {
 	
 					// paint trail (-id)
-					grid[aligned_y][aligned_x] = -(*players[i]).id;
-					
-					// update bounds
-					if ( (*players[i]).x_upper < aligned_x ) {
-						(*players[i]).x_upper = aligned_x;
-					} if ( (*players[i]).x_lower > aligned_x ) {
-						(*players[i]).x_lower = aligned_x;
-					} if ( (*players[i]).y_upper < aligned_y ) {
-						(*players[i]).y_upper = aligned_y;
-					} if ( (*players[i]).y_lower > aligned_y ) {
-						(*players[i]).y_lower = aligned_y;
-					}
+					grid[(*current).y_aligned][(*current).x_aligned] = -(*current).id;
+					update_bounds(current);
 
-				} else if ( grid[(*players[i]).prev_y_aligned][(*players[i]).prev_x_aligned] != (*players[i]).id ) {
-					area_capture(grid, (*players[i]) );
+				// check if previous tile was outside of home
+				// if so, capture area.
+				} else if ( grid[(*current).prev_y_aligned][(*current).prev_x_aligned] != (*current).id ) {
+					area_capture(grid, (*current) );
 				}
 
-				move_status = check_next_move(grid, (*players[i]));
+				// if move_status is not zero, it is the id of the losing player
+				move_status = check_next_move(grid, (*current));
 					if ( move_status != 0 ) {
+	
+						// clear player tiles
 						replace(grid, move_status, 0, ROWS, COLUMNS);
 						replace(grid, -move_status, 0, ROWS, COLUMNS);
+						
+						//respawn player
 						spawn(grid, players[move_status-1]);
 					}
-					
 
-				(*players[i]).prev_y_aligned = aligned_y;
-				(*players[i]).prev_x_aligned = aligned_x;
+				// update "previous position" to current
+				(*current).prev_y_aligned = (*current).y_aligned;
+				(*current).prev_x_aligned = (*current).x_aligned;
 			}
 			
-
+			// advance player
 			move_player(players[i], head_step);
 		}
+		
+		// draw everything
 		draw(grid, players, players_len);
-
 	}
 
 	exit_game:
